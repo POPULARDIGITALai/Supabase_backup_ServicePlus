@@ -12,6 +12,12 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
+CREATE SCHEMA IF NOT EXISTS "ServicePlus";
+
+
+ALTER SCHEMA "ServicePlus" OWNER TO "postgres";
+
+
 CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
 
 
