@@ -78,6 +78,110 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+CREATE OR REPLACE FUNCTION "public"."get_advisor_summary"("advisor_name_input" "text", "branch_input" "text", "start_date_input" "text", "end_date_input" "text") RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    start_date DATE;
+    end_date DATE;
+BEGIN
+    -- Convert 'Null' strings to real NULL
+    start_date := NULLIF(start_date_input, 'Null')::DATE;
+    end_date := NULLIF(end_date_input, 'Null')::DATE;
+
+    SELECT json_build_object(
+        'advisor_name', advisor_name_input,
+        'branch', branch_input,
+        'total_leads', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+        'hot_leads', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status = 'Hot Lead'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+        'conversions', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status = 'Conversion'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+        'incentive_count', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0)
+    ) INTO result
+    FROM "Master";
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_advisor_summary"("advisor_name_input" "text", "branch_input" "text", "start_date_input" "text", "end_date_input" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_branch_advisors_summary"("branch_input" "text", "start_date_input" "text", "end_date_input" "text") RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    start_date DATE;
+    end_date DATE;
+BEGIN
+    -- Convert string 'Null' to actual NULLs
+    start_date := NULLIF(start_date_input, 'Null')::DATE;
+    end_date := NULLIF(end_date_input, 'Null')::DATE;
+
+    SELECT json_agg(row_to_json(t)) INTO result
+    FROM (
+        SELECT 
+            ROW_NUMBER() OVER (ORDER BY 
+                COUNT(*) FILTER (
+                    WHERE ticket_status = 'Hot Lead'
+                    AND (start_date IS NULL OR created_at::date >= start_date)
+                    AND (end_date IS NULL OR created_at::date <= end_date)
+                ) DESC
+            ) AS no,
+            advisor_name,
+            COUNT(*) FILTER (
+                WHERE ticket_status = 'Hot Lead'
+                AND (start_date IS NULL OR created_at::date >= start_date)
+                AND (end_date IS NULL OR created_at::date <= end_date)
+            ) AS hot_leads,
+            COUNT(*) FILTER (
+                WHERE ticket_status = 'Conversion'
+                AND (start_date IS NULL OR created_at::date >= start_date)
+                AND (end_date IS NULL OR created_at::date <= end_date)
+            ) AS conversions,
+            COUNT(*) FILTER (
+                WHERE ticket_status IS DISTINCT FROM 'Cold Lead'
+                AND (start_date IS NULL OR created_at::date >= start_date)
+                AND (end_date IS NULL OR created_at::date <= end_date)
+            ) AS incentive_count
+        FROM "Master"
+        WHERE branch = branch_input
+        GROUP BY advisor_name
+    ) t;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_branch_advisors_summary"("branch_input" "text", "start_date_input" "text", "end_date_input" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_filtered_master_data"("p_advisor_name" "text" DEFAULT NULL::"text", "p_pic" "text" DEFAULT NULL::"text", "p_branch" "text" DEFAULT NULL::"text", "p_ticket_status" "text" DEFAULT NULL::"text", "p_lead_type" "text" DEFAULT NULL::"text", "p_service_type" "text" DEFAULT NULL::"text", "p_auth_role" "text" DEFAULT NULL::"text", "p_auth_branch" "text" DEFAULT NULL::"text", "p_from_date" "text" DEFAULT NULL::"text", "p_to_date" "text" DEFAULT NULL::"text", "p_sort_order" "text" DEFAULT NULL::"text") RETURNS "json"
     LANGUAGE "plpgsql"
     AS $$
@@ -1568,6 +1672,18 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+
+
+
+GRANT ALL ON FUNCTION "public"."get_advisor_summary"("advisor_name_input" "text", "branch_input" "text", "start_date_input" "text", "end_date_input" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_advisor_summary"("advisor_name_input" "text", "branch_input" "text", "start_date_input" "text", "end_date_input" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_advisor_summary"("advisor_name_input" "text", "branch_input" "text", "start_date_input" "text", "end_date_input" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_branch_advisors_summary"("branch_input" "text", "start_date_input" "text", "end_date_input" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_branch_advisors_summary"("branch_input" "text", "start_date_input" "text", "end_date_input" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_branch_advisors_summary"("branch_input" "text", "start_date_input" "text", "end_date_input" "text") TO "service_role";
 
 
 
