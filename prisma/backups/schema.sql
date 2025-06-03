@@ -117,6 +117,7 @@ BEGIN
             WHERE advisor_name = advisor_name_input
             AND branch = branch_input
             AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND ticket_status IS DISTINCT FROM 'Target Lead'
             AND (start_date IS NULL OR created_at::date >= start_date)
             AND (end_date IS NULL OR created_at::date <= end_date)
         ), 0)
