@@ -1310,7 +1310,9 @@ CREATE TABLE IF NOT EXISTS "public"."Master" (
     "colortype_attestr" character varying,
     "Insurance_Expiry_attestr" "text",
     "Emission_Test_Expiry_attestr" "text",
-    "FC_Date_attestr" "text"
+    "FC_Date_attestr" "text",
+    "odometer_reading" bigint,
+    "Insurance_policy_number" "text"
 );
 
 
