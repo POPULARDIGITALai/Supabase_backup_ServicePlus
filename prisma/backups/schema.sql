@@ -1108,6 +1108,42 @@ $$;
 
 ALTER FUNCTION "public"."get_master_ticket_status_summary2"("branch_input" character varying, "from_date_input" character varying, "to_date_input" character varying, "pic_input" character varying) OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."recommendation"("branch" character varying DEFAULT NULL::character varying, "service_type" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    service_type := NULLIF(service_type, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+
+    EXECUTE format(
+        'SELECT COALESCE(json_agg(t), ''[]''::json) FROM (
+            SELECT * FROM "Master"
+            WHERE ticket_status IN (''Hot Lead'', ''Follow Up'')
+            AND (%L IS NULL OR branch = %L)
+            AND (%L IS NULL OR service_type = %L)
+            AND (%L IS NULL OR udpate_time >= %L::timestamp)
+            AND (%L IS NULL OR udpate_time <= %L::timestamp)
+            ORDER BY id ASC
+        ) t;',
+        branch, branch,
+        service_type, service_type,
+        from_date, from_date,
+        to_date, to_date
+    ) INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -1312,7 +1348,8 @@ CREATE TABLE IF NOT EXISTS "public"."Master" (
     "Emission_Test_Expiry_attestr" "text",
     "FC_Date_attestr" "text",
     "odometer_reading" bigint,
-    "Insurance_policy_number" "text"
+    "Insurance_policy_number" "text",
+    "revenue" bigint
 );
 
 
@@ -1710,6 +1747,12 @@ GRANT ALL ON FUNCTION "public"."get_master_ticket_status_summary1"("branch_input
 GRANT ALL ON FUNCTION "public"."get_master_ticket_status_summary2"("branch_input" character varying, "from_date_input" character varying, "to_date_input" character varying, "pic_input" character varying) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_master_ticket_status_summary2"("branch_input" character varying, "from_date_input" character varying, "to_date_input" character varying, "pic_input" character varying) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_master_ticket_status_summary2"("branch_input" character varying, "from_date_input" character varying, "to_date_input" character varying, "pic_input" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "service_role";
 
 
 
