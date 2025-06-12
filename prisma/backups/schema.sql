@@ -120,6 +120,24 @@ BEGIN
             AND ticket_status IS DISTINCT FROM 'Target Lead'
             AND (start_date IS NULL OR created_at::date >= start_date)
             AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+        'incentive_count_InDealer', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND ticket_status IS DISTINCT FROM 'Target Lead'
+            AND lead_type = 'In-Dealer'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+        'incentive_count_External', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND ticket_status IS DISTINCT FROM 'Target Lead'
+            AND lead_type = 'External'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
         ), 0)
     ) INTO result
     FROM "Master";
