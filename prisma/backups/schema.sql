@@ -138,6 +138,36 @@ BEGIN
             AND lead_type = 'External'
             AND (start_date IS NULL OR created_at::date >= start_date)
             AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+         'incentive_count_External_Minor_Damage', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND ticket_status IS DISTINCT FROM 'Target Lead'
+            AND lead_type = 'External'
+            AND "Car_Damage" = 'Minor Damage'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+         'incentive_count_External_Medium_Damage', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND ticket_status IS DISTINCT FROM 'Target Lead'
+            AND lead_type = 'External'
+            AND "Car_Damage" = 'Medium Damage'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
+        ), 0),
+         'incentive_count_External_Major_Damage', COALESCE(COUNT(*) FILTER (
+            WHERE advisor_name = advisor_name_input
+            AND branch = branch_input
+            AND ticket_status IS DISTINCT FROM 'Cold Lead'
+            AND ticket_status IS DISTINCT FROM 'Target Lead'
+            AND lead_type = 'External'
+            AND "Car_Damage" = 'Major Damage'
+            AND (start_date IS NULL OR created_at::date >= start_date)
+            AND (end_date IS NULL OR created_at::date <= end_date)
         ), 0)
     ) INTO result
     FROM "Master";
@@ -1367,7 +1397,8 @@ CREATE TABLE IF NOT EXISTS "public"."Master" (
     "FC_Date_attestr" "text",
     "odometer_reading" bigint,
     "Insurance_policy_number" "text",
-    "revenue" bigint
+    "revenue" bigint,
+    "Car_Damage" "text"
 );
 
 
