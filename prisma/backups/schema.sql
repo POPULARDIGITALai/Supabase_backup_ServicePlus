@@ -1399,7 +1399,10 @@ CREATE TABLE IF NOT EXISTS "public"."Master" (
     "odometer_reading" bigint,
     "Insurance_policy_number" "text",
     "revenue" bigint,
-    "Car_Damage" "text"
+    "Car_Damage" "text",
+    "Insurance_Recommended" "text",
+    "Emission_Recommended" "text",
+    "Fc_Recommended" "text"
 );
 
 
