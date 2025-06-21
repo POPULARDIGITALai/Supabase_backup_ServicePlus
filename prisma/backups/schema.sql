@@ -1193,6 +1193,228 @@ $$;
 
 ALTER FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."recommendation"("branch" character varying DEFAULT NULL::character varying, "service_type" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "insurance_false" character varying DEFAULT NULL::character varying, "fc_false" character varying DEFAULT NULL::character varying, "emission_false" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    service_type := NULLIF(service_type, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+    insurance_false := NULLIF(insurance_false, 'Null');
+    fc_false := NULLIF(fc_false, 'Null');
+    emission_false := NULLIF(emission_false, 'Null');
+
+    base_query := '
+        SELECT COALESCE(json_agg(t), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master"
+            WHERE ticket_status IN (''Hot Lead'', ''Follow Up'')';
+
+    -- Dynamically build WHERE clauses
+    IF branch IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND branch = %L', branch);
+    END IF;
+
+    IF service_type IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND service_type = %L', service_type);
+
+        -- Add filters if service_type is ClickPolicy
+        IF service_type = 'ClickPolicy' THEN
+            IF insurance_false = 'true' THEN
+                where_clauses := where_clauses || ' AND "Insurance_Recommended" = ''false''';
+            END IF;
+            IF fc_false = 'true' THEN
+                where_clauses := where_clauses || ' AND "Fc_Recommended" = ''false''';
+            END IF;
+            IF emission_false = 'true' THEN
+                where_clauses := where_clauses || ' AND "Emission_Recommended" = ''false''';
+            END IF;
+        END IF;
+    END IF;
+
+    IF from_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time >= %L::timestamp', from_date);
+    END IF;
+
+    IF to_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time <= %L::timestamp', to_date);
+    END IF;
+
+    base_query := base_query || where_clauses || ' ORDER BY id ASC) t;';
+
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" character varying, "fc_false" character varying, "emission_false" character varying) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recommendation1"("branch" character varying DEFAULT NULL::character varying, "service_type" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    service_type := NULLIF(service_type, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+
+    EXECUTE format(
+        'SELECT COALESCE(json_agg(t), ''[]''::json) FROM (
+            SELECT * FROM "Master"
+            WHERE ticket_status IN (''Hot Lead'', ''Follow Up'')
+            AND (%L IS NULL OR branch = %L)
+            AND (%L IS NULL OR service_type = %L)
+            AND (%L IS NULL OR udpate_time >= %L::timestamp)
+            AND (%L IS NULL OR udpate_time <= %L::timestamp)
+            ORDER BY id ASC
+        ) t;',
+        branch, branch,
+        service_type, service_type,
+        from_date, from_date,
+        to_date, to_date
+    ) INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recommendation_policy"("branch" character varying DEFAULT NULL::character varying, "service_type" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "insurance_false" boolean DEFAULT NULL::boolean, "fc_false" boolean DEFAULT NULL::boolean, "emission_false" boolean DEFAULT NULL::boolean) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    service_type := NULLIF(service_type, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+
+    base_query := '
+        SELECT COALESCE(json_agg(t), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master"
+            WHERE ticket_status IN (''Hot Lead'', ''Follow Up'')';
+
+    -- Dynamically build WHERE clauses
+    IF branch IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND branch = %L', branch);
+    END IF;
+
+    IF service_type IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND service_type = %L', service_type);
+
+        -- Add conditional filters only for 'ClickPolicy'
+        IF service_type = 'ClickPolicy' THEN
+            IF insurance_false THEN
+                where_clauses := where_clauses || ' AND "Insurance_Recommended" = false';
+            END IF;
+            IF fc_false THEN
+                where_clauses := where_clauses || ' AND "Fc_Recommended" = false';
+            END IF;
+            IF emission_false THEN
+                where_clauses := where_clauses || ' AND "Emission_Recommended" = false';
+            END IF;
+        END IF;
+    END IF;
+
+    IF from_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time >= %L::timestamp', from_date);
+    END IF;
+
+    IF to_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time <= %L::timestamp', to_date);
+    END IF;
+
+    -- Finish query
+    base_query := base_query || where_clauses || ' ORDER BY id ASC) t;';
+
+    -- Execute final query
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recommendation_policy1"("branch" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "recommend_input" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+    recommend_input := LOWER(NULLIF(recommend_input, 'Null'));  -- Normalize case
+
+    base_query := '
+        SELECT COALESCE(json_agg(t), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master"
+            WHERE ticket_status IN (''Hot Lead'', ''Follow Up'')
+            AND service_type = ''ClickPolicy''';  -- Fixed value
+
+    -- Optional filters
+    IF branch IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND branch = %L', branch);
+    END IF;
+
+    IF from_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time >= %L::timestamp', from_date);
+    END IF;
+
+    IF to_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time <= %L::timestamp', to_date);
+    END IF;
+
+    -- Conditional recommended filters
+    IF recommend_input = 'insurance' THEN
+        where_clauses := where_clauses || ' AND "Insurance_Recommended" = ''false''';
+    ELSIF recommend_input = 'emission' THEN
+        where_clauses := where_clauses || ' AND "Emission_Recommended" = ''false''';
+    ELSIF recommend_input = 'fc' THEN
+        where_clauses := where_clauses || ' AND "Fc_Recommended" = ''false''';
+    END IF;
+
+    -- Complete query
+    base_query := base_query || where_clauses || ' ORDER BY id ASC) t;';
+
+    -- Execute
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -1806,6 +2028,30 @@ GRANT ALL ON FUNCTION "public"."get_master_ticket_status_summary2"("branch_input
 GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "anon";
 GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" character varying, "fc_false" character varying, "emission_false" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" character varying, "fc_false" character varying, "emission_false" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" character varying, "fc_false" character varying, "emission_false" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "service_role";
 
 
 
