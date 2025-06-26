@@ -1339,6 +1339,61 @@ $$;
 ALTER FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."recommendation_dent"("branch" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+
+    base_query := '
+        SELECT COALESCE(json_agg(m), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master" m
+            WHERE m.ticket_status IN (''Hot Lead'', ''Follow Up'')
+              AND m.service_type = ''ClickDent''
+              AND m.id IN (
+                  SELECT lead_id
+                  FROM "DentDetection_Damage"
+                  WHERE is_damaged = ''true''
+                  GROUP BY lead_id
+                  HAVING COUNT(*) > 0
+              )
+    ';
+
+    -- Optional filters
+    IF branch IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.branch = %L', branch);
+    END IF;
+
+    IF from_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.udpate_time >= %L::timestamp', from_date);
+    END IF;
+
+    IF to_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.udpate_time <= %L::timestamp', to_date);
+    END IF;
+
+    -- Complete query
+    base_query := base_query || where_clauses || ' ORDER BY m.id ASC) m;';
+
+    -- Execute
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation_dent"("branch" character varying, "from_date" character varying, "to_date" character varying) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."recommendation_policy"("branch" character varying DEFAULT NULL::character varying, "service_type" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "insurance_false" boolean DEFAULT NULL::boolean, "fc_false" boolean DEFAULT NULL::boolean, "emission_false" boolean DEFAULT NULL::boolean) RETURNS "json"
     LANGUAGE "plpgsql"
     AS $$
@@ -1562,8 +1617,9 @@ CREATE TABLE IF NOT EXISTS "public"."DentDetection_Damage" (
     "id" bigint NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "lead_id" integer,
-    "Image_url" "text",
-    "damage_json" "jsonb"
+    "image_url" "text",
+    "damage_json" "jsonb",
+    "is_damaged" "text"
 );
 
 
@@ -2101,6 +2157,12 @@ GRANT ALL ON FUNCTION "public"."recommendation"("branch" character varying, "ser
 GRANT ALL ON FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "anon";
 GRANT ALL ON FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recommendation1"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation_dent"("branch" character varying, "from_date" character varying, "to_date" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation_dent"("branch" character varying, "from_date" character varying, "to_date" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation_dent"("branch" character varying, "from_date" character varying, "to_date" character varying) TO "service_role";
 
 
 
