@@ -1720,7 +1720,8 @@ CREATE TABLE IF NOT EXISTS "public"."Master" (
     "Car_Damage" "text",
     "Insurance_Recommended" "text",
     "Emission_Recommended" "text",
-    "Fc_Recommended" "text"
+    "Fc_Recommended" "text",
+    "insurence_protect" "text"
 );
 
 
