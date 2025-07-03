@@ -1514,6 +1514,20 @@ $$;
 
 ALTER FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."truncate_update_time"() RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+begin
+    update "Master"
+    set udpate_time = date_trunc('day', udpate_time)
+    where udpate_time::time != '00:00:00'::time;  -- update only if not already truncated
+end;
+$$;
+
+
+ALTER FUNCTION "public"."truncate_update_time"() OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -2176,6 +2190,12 @@ GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varyin
 GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "anon";
 GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."truncate_update_time"() TO "anon";
+GRANT ALL ON FUNCTION "public"."truncate_update_time"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."truncate_update_time"() TO "service_role";
 
 
 
