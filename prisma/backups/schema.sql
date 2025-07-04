@@ -1394,6 +1394,67 @@ $$;
 ALTER FUNCTION "public"."recommendation_dent"("branch" character varying, "from_date" character varying, "to_date" character varying) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."recommendation_dent1"("branch" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "car_number" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+    car_number := NULLIF(car_number, 'Null');
+
+    base_query := '
+        SELECT COALESCE(json_agg(m), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master" m
+            WHERE m.ticket_status IN (''Hot Lead'', ''Follow Up'')
+              AND m.service_type = ''ClickDent''
+              AND m.id IN (
+                  SELECT lead_id
+                  FROM "DentDetection_Damage"
+                  WHERE is_damaged = ''true''
+                  GROUP BY lead_id
+                  HAVING COUNT(*) > 0
+              )
+    ';
+
+    -- Optional filters
+    IF branch IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.branch = %L', branch);
+    END IF;
+
+    IF from_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.udpate_time >= %L::timestamp', from_date);
+    END IF;
+
+    IF to_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.udpate_time <= %L::timestamp', to_date);
+    END IF;
+
+    -- Car number search filter
+    IF car_number IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND m.car_number ILIKE %L', '%' || car_number || '%');
+    END IF;
+
+    -- Complete query
+    base_query := base_query || where_clauses || ' ORDER BY m.id ASC) m;';
+
+    -- Execute
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation_dent1"("branch" character varying, "from_date" character varying, "to_date" character varying, "car_number" character varying) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."recommendation_policy"("branch" character varying DEFAULT NULL::character varying, "service_type" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "insurance_false" boolean DEFAULT NULL::boolean, "fc_false" boolean DEFAULT NULL::boolean, "emission_false" boolean DEFAULT NULL::boolean) RETURNS "json"
     LANGUAGE "plpgsql"
     AS $$
@@ -1513,6 +1574,133 @@ $$;
 
 
 ALTER FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recommendation_policy2"("branch" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "recommend_input" character varying DEFAULT NULL::character varying, "search_car_number" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+    recommend_input := LOWER(NULLIF(recommend_input, 'Null'));
+    search_car_number := NULLIF(search_car_number, 'Null');
+
+    base_query := '
+        SELECT COALESCE(json_agg(t), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master"
+            WHERE 1=1';
+
+    -- If car number is provided, ignore all other filters
+    IF search_car_number IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND car_number ILIKE %L', '%' || search_car_number || '%');
+    ELSE
+        -- Existing filters when car number is NOT provided
+        where_clauses := where_clauses || ' AND ticket_status IN (''Hot Lead'', ''Follow Up'')';
+        where_clauses := where_clauses || ' AND service_type = ''ClickPolicy''';
+
+        IF branch IS NOT NULL THEN
+            where_clauses := where_clauses || format(' AND branch = %L', branch);
+        END IF;
+
+        IF from_date IS NOT NULL THEN
+            where_clauses := where_clauses || format(' AND udpate_time >= %L::timestamp', from_date);
+        END IF;
+
+        IF to_date IS NOT NULL THEN
+            where_clauses := where_clauses || format(' AND udpate_time <= %L::timestamp', to_date);
+        END IF;
+
+        IF recommend_input = 'insurance' THEN
+            where_clauses := where_clauses || ' AND "Insurance_Recommended" = ''false''';
+        ELSIF recommend_input = 'emission' THEN
+            where_clauses := where_clauses || ' AND "Emission_Recommended" = ''false''';
+        ELSIF recommend_input = 'fc' THEN
+            where_clauses := where_clauses || ' AND "Fc_Recommended" = ''false''';
+        END IF;
+    END IF;
+
+    -- Final query
+    base_query := base_query || where_clauses || ' ORDER BY id ASC) t;';
+
+    -- Execute
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation_policy2"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "search_car_number" character varying) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recommendation_policy3"("branch" character varying DEFAULT NULL::character varying, "from_date" character varying DEFAULT NULL::character varying, "to_date" character varying DEFAULT NULL::character varying, "recommend_input" character varying DEFAULT NULL::character varying, "car_number" character varying DEFAULT NULL::character varying) RETURNS "json"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    result JSON;
+    base_query TEXT;
+    where_clauses TEXT := '';
+BEGIN
+    -- Convert 'Null' strings to actual NULLs
+    branch := NULLIF(branch, 'Null');
+    from_date := NULLIF(from_date, 'Null');
+    to_date := NULLIF(to_date, 'Null');
+    recommend_input := LOWER(NULLIF(recommend_input, 'Null'));
+    car_number := NULLIF(car_number, 'Null');
+
+    base_query := '
+        SELECT COALESCE(json_agg(t), ''[]''::json)
+        FROM (
+            SELECT * FROM "Master"
+            WHERE ticket_status IN (''Hot Lead'', ''Follow Up'')
+            AND service_type = ''ClickPolicy''';
+
+    -- Optional filters
+    IF branch IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND branch = %L', branch);
+    END IF;
+
+    IF from_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time >= %L::timestamp', from_date);
+    END IF;
+
+    IF to_date IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND udpate_time <= %L::timestamp', to_date);
+    END IF;
+
+    -- Conditional recommended filters
+    IF recommend_input = 'insurance' THEN
+        where_clauses := where_clauses || ' AND "Insurance_Recommended" = ''false''';
+    ELSIF recommend_input = 'emission' THEN
+        where_clauses := where_clauses || ' AND "Emission_Recommended" = ''false''';
+    ELSIF recommend_input = 'fc' THEN
+        where_clauses := where_clauses || ' AND "Fc_Recommended" = ''false''';
+    END IF;
+
+    -- Car number filter
+    IF car_number IS NOT NULL THEN
+        where_clauses := where_clauses || format(' AND car_number ILIKE %L', '%' || car_number || '%');
+    END IF;
+
+    -- Complete query
+    base_query := base_query || where_clauses || ' ORDER BY id ASC) t;';
+
+    -- Execute
+    EXECUTE base_query INTO result;
+
+    RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recommendation_policy3"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "car_number" character varying) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."truncate_update_time"() RETURNS "void"
@@ -2181,6 +2369,12 @@ GRANT ALL ON FUNCTION "public"."recommendation_dent"("branch" character varying,
 
 
 
+GRANT ALL ON FUNCTION "public"."recommendation_dent1"("branch" character varying, "from_date" character varying, "to_date" character varying, "car_number" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation_dent1"("branch" character varying, "from_date" character varying, "to_date" character varying, "car_number" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation_dent1"("branch" character varying, "from_date" character varying, "to_date" character varying, "car_number" character varying) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) TO "anon";
 GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varying, "service_type" character varying, "from_date" character varying, "to_date" character varying, "insurance_false" boolean, "fc_false" boolean, "emission_false" boolean) TO "service_role";
@@ -2190,6 +2384,18 @@ GRANT ALL ON FUNCTION "public"."recommendation_policy"("branch" character varyin
 GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "anon";
 GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recommendation_policy1"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation_policy2"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "search_car_number" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation_policy2"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "search_car_number" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation_policy2"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "search_car_number" character varying) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recommendation_policy3"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "car_number" character varying) TO "anon";
+GRANT ALL ON FUNCTION "public"."recommendation_policy3"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "car_number" character varying) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recommendation_policy3"("branch" character varying, "from_date" character varying, "to_date" character varying, "recommend_input" character varying, "car_number" character varying) TO "service_role";
 
 
 
