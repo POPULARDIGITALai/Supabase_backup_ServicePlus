@@ -86,6 +86,27 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+CREATE OR REPLACE FUNCTION "public"."dent_damage_webhook"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    -- Only proceed if the inserted row is damaged
+    IF NEW.is_damaged = 'true' THEN
+        -- Update the ticket_status in the Master table
+        UPDATE "Master"
+        SET ticket_status = 'Hot Lead'
+        WHERE id = NEW.lead_id
+          AND ticket_status = 'Target Lead';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dent_damage_webhook"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_advisor_summary"("advisor_name_input" "text", "branch_input" "text", "start_date_input" "text", "end_date_input" "text") RETURNS "json"
     LANGUAGE "plpgsql"
     AS $$
@@ -2000,6 +2021,10 @@ CREATE OR REPLACE TRIGGER "damage" AFTER INSERT ON "public"."Master" FOR EACH RO
 
 
 
+CREATE OR REPLACE TRIGGER "dent_damage_insert_trigger" AFTER INSERT ON "public"."DentDetection_Damage" FOR EACH ROW EXECUTE FUNCTION "public"."dent_damage_webhook"();
+
+
+
 ALTER TABLE ONLY "public"."Damage Levels"
     ADD CONSTRAINT "Damage Levels_lead_id_fkey" FOREIGN KEY ("lead_id") REFERENCES "public"."Master"("id");
 
@@ -2234,6 +2259,12 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+
+
+
+GRANT ALL ON FUNCTION "public"."dent_damage_webhook"() TO "anon";
+GRANT ALL ON FUNCTION "public"."dent_damage_webhook"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."dent_damage_webhook"() TO "service_role";
 
 
 
