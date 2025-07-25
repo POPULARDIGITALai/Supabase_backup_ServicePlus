@@ -1736,6 +1736,39 @@ $$;
 
 ALTER FUNCTION "public"."truncate_update_time"() OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."truncate_update_time_trigger_fn"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  -- Run on insert or when udpate_time has a time component
+  IF TG_OP = 'INSERT' OR NEW.udpate_time::time != '00:00:00'::time THEN
+    NEW.udpate_time := date_trunc('day', NEW.udpate_time);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."truncate_update_time_trigger_fn"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_dateandtime_trigger_fn"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  -- Run for insert or if created_at changes
+  IF TG_OP = 'INSERT' OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    NEW."DateAndTime" := to_char(NEW.created_at AT TIME ZONE 'Asia/Kolkata', 
+                                 'Dy, Mon DD HH12:MI AM');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_dateandtime_trigger_fn"() OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -2021,6 +2054,14 @@ CREATE OR REPLACE TRIGGER "damage" AFTER INSERT ON "public"."Master" FOR EACH RO
 
 
 CREATE OR REPLACE TRIGGER "dent_damage_insert_trigger" AFTER INSERT ON "public"."DentDetection_Damage" FOR EACH ROW EXECUTE FUNCTION "public"."dent_damage_webhook"();
+
+
+
+CREATE OR REPLACE TRIGGER "truncate_update_time_trigger" BEFORE INSERT OR UPDATE ON "public"."Master" FOR EACH ROW EXECUTE FUNCTION "public"."truncate_update_time_trigger_fn"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_dateandtime_trigger" BEFORE INSERT OR UPDATE ON "public"."Master" FOR EACH ROW EXECUTE FUNCTION "public"."update_dateandtime_trigger_fn"();
 
 
 
@@ -2432,6 +2473,18 @@ GRANT ALL ON FUNCTION "public"."recommendation_policy3"("branch" character varyi
 GRANT ALL ON FUNCTION "public"."truncate_update_time"() TO "anon";
 GRANT ALL ON FUNCTION "public"."truncate_update_time"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."truncate_update_time"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."truncate_update_time_trigger_fn"() TO "anon";
+GRANT ALL ON FUNCTION "public"."truncate_update_time_trigger_fn"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."truncate_update_time_trigger_fn"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_dateandtime_trigger_fn"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_dateandtime_trigger_fn"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_dateandtime_trigger_fn"() TO "service_role";
 
 
 
